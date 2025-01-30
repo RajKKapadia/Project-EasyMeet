@@ -9,8 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useMemo, useTransition } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatDate, formatTimeString, formatTimezoneOffset } from "@/lib/formatters"
@@ -29,10 +27,16 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
     clerkUserId: string
 }) {
     const [isPending, startTransition] = useTransition()
+    const currentDate = new Date()
+    currentDate.setDate(currentDate.getDate() + 1)
     const form = useForm<z.infer<typeof meetingFormSchema>>({
         resolver: zodResolver(meetingFormSchema),
         defaultValues: {
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            date: currentDate,
+            guestEmail: "",
+            guestName: "",
+            guestNotes: ""
         }
     })
     const timezone = form.watch("timezone")
@@ -40,17 +44,19 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
     const validTimesInTimezone = useMemo(() => {
         return validTimes.map(date => toZonedTime(date, timezone))
     }, [validTimes, timezone])
-    async function onSubmit(values: z.infer<typeof meetingFormSchema>) {
-        const data = await createMeeting({
-            ...values,
-            eventId: eventId,
-            clerkUserId: clerkUserId
-        })
-        if (data?.error) {
-            form.setError("root", {
-                message: "There was an error saving your event",
+    function onSubmit(values: z.infer<typeof meetingFormSchema>) {
+        startTransition(async () => {
+            const data = await createMeeting({
+                ...values,
+                eventId: eventId,
+                clerkUserId: clerkUserId
             })
-        }
+            if (data?.error) {
+                form.setError("root", {
+                    message: "There was an error saving your event",
+                })
+            }
+        })
     }
     return (
         <Form {...form}>
@@ -236,7 +242,7 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                     >
                         <Link href={`/book/${clerkUserId}`}>Cancel</Link>
                     </Button>
-                    <Button disabled={form.formState.isSubmitting} type="submit">
+                    <Button disabled={form.formState.isSubmitting && isPending} type="submit">
                         Schedule
                     </Button>
                 </div>

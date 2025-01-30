@@ -14,6 +14,9 @@ export async function createMeeting(
 ) {
     const { success, data } = meetingActionSchema.safeParse(unsafeData)
 
+    console.log(`Flag for parsing: ${success}`)
+    console.log(`Parsed data: ${data}`)
+
     if (!success) return { error: true }
 
     const event = await db.query.EventTable.findFirst({
@@ -26,10 +29,15 @@ export async function createMeeting(
         },
     })
 
+    console.log(`Event: ${event}`)
+
     if (event == null) return { error: true }
     const startInTimezone = fromZonedTime(data.startTime, data.timezone)
 
+    console.log(`Start time zone: ${startInTimezone}`)
+
     const validTimes = await getValidTimesFromSchedule([startInTimezone], event)
+    console.log(`Valid times: ${validTimes}`)
     if (validTimes.length === 0) return { error: true }
 
     await createCalendarEvent({
@@ -38,6 +46,8 @@ export async function createMeeting(
         durationInMinutes: event.durationInMinutes,
         eventName: event.name,
     })
+
+    console.log("Event created...")
 
     redirect(
         `/book/${data.clerkUserId}/${data.eventId

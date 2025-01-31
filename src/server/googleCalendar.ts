@@ -5,9 +5,6 @@ import { clerkClient } from "@clerk/nextjs/server"
 import { google } from "googleapis"
 import { addMinutes, endOfDay, startOfDay } from "date-fns"
 
-console.log("Environment key: ")
-console.log(process.env.GOOGLE_OAUTH_CLIENT_ID)
-
 export async function getCalendarEventTimes(
     { clerkUserId, start, end }: { clerkUserId: string, start: Date, end: Date }
 ) {

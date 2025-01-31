@@ -28,7 +28,6 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
 }) {
     const [isPending, startTransition] = useTransition()
     const currentDate = new Date()
-    currentDate.setDate(currentDate.getDate() + 1)
     const form = useForm<z.infer<typeof meetingFormSchema>>({
         resolver: zodResolver(meetingFormSchema),
         defaultValues: {

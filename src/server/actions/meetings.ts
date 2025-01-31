@@ -15,7 +15,7 @@ export async function createMeeting(
     const { success, data } = meetingActionSchema.safeParse(unsafeData)
 
     console.log(`Flag for parsing: ${success}`)
-    console.log(`Parsed data: ${data}`)
+    console.log(`Parsed data: ${JSON.stringify(data, null, 2)}`)
 
     if (!success) return { error: true }
 
@@ -29,7 +29,7 @@ export async function createMeeting(
         },
     })
 
-    console.log(`Event: ${event}`)
+    console.log(`Event: ${JSON.stringify(event, null, 2)}`)
 
     if (event == null) return { error: true }
     const startInTimezone = fromZonedTime(data.startTime, data.timezone)

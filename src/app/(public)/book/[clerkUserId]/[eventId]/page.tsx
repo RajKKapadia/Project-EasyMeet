@@ -38,8 +38,10 @@ export default async function BookEventPage({ params }: { params: Promise<{ cler
     const endDate = endOfDay(addMonths(startDate, 1))
 
     const validTimes = await getValidTimesFromSchedule(
-        eachMinuteOfInterval({ start: startDate, end: endDate }, { step: event.durationInMinutes }),
-        event
+        {
+            timesInOrder: eachMinuteOfInterval({ start: startDate, end: endDate }, { step: event.durationInMinutes }),
+            event: event
+        }
     )
 
     if (validTimes.length === 0) {

@@ -19,11 +19,16 @@ import {
 import { fromZonedTime } from "date-fns-tz"
 
 export async function getValidTimesFromSchedule(
-    timesInOrder: Date[],
-    event: { clerkUserId: string; durationInMinutes: number }
+    { timesInOrder, event }: {
+        timesInOrder: Date[],
+        event: { clerkUserId: string; durationInMinutes: number }
+    }
 ) {
     const start = timesInOrder[0]
     const end = timesInOrder.at(-1)
+
+    console.log(start)
+    console.log(end)
 
     if (start == null || end == null) return []
 
@@ -33,6 +38,8 @@ export async function getValidTimesFromSchedule(
         with: { availabilities: true },
     })
 
+    console.log(schedule)
+
     if (schedule == null) return []
 
     const groupedAvailabilities = Object.groupBy(
@@ -40,11 +47,15 @@ export async function getValidTimesFromSchedule(
         a => a.dayOfWeek
     )
 
+    console.log(groupedAvailabilities)
+
     const eventTimes = await getCalendarEventTimes({
         clerkUserId: event.clerkUserId,
         end: end,
         start: start
     })
+
+    console.log(eventTimes)
 
     return timesInOrder.filter(intervalDate => {
         const availabilities = getAvailabilities(

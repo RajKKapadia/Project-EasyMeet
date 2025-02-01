@@ -27,15 +27,10 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
     clerkUserId: string
 }) {
     const [isPending, startTransition] = useTransition()
-    const currentDate = new Date()
     const form = useForm<z.infer<typeof meetingFormSchema>>({
         resolver: zodResolver(meetingFormSchema),
         defaultValues: {
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            date: currentDate,
-            guestEmail: "",
-            guestName: "",
-            guestNotes: ""
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
         }
     })
     const timezone = form.watch("timezone")

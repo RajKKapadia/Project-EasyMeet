@@ -39,6 +39,8 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
         return validTimes.map(date => toZonedTime(date, timezone))
     }, [validTimes, timezone])
     function onSubmit(values: z.infer<typeof meetingFormSchema>) {
+        console.log("In the meeting form...")
+        console.log(values)
         startTransition(async () => {
             const data = await createMeeting({
                 ...values,

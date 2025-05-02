@@ -13,9 +13,9 @@ import { meetingActionSchema } from "@/schema/meetings"
 export async function createMeeting(
     unsafeData: z.infer<typeof meetingActionSchema>
 ) {
+    console.log("In the create meeting function.")
     const { success, data } = meetingActionSchema.safeParse(unsafeData)
 
-    console.log("In the create meeting function.")
     console.log(success)
     console.log(data)
 

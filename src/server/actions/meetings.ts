@@ -1,18 +1,23 @@
 "use server"
 
+import "use-server"
+import { z } from "zod"
+import { redirect } from "next/navigation"
+import { fromZonedTime } from "date-fns-tz"
+
+import { createCalendarEvent } from "../googleCalendar"
 import { db } from "@/drizzle/db"
 import { getValidTimesFromSchedule } from "@/lib/getValidTimesFromSchedule"
 import { meetingActionSchema } from "@/schema/meetings"
-import "use-server"
-import { z } from "zod"
-import { createCalendarEvent } from "../googleCalendar"
-import { redirect } from "next/navigation"
-import { fromZonedTime } from "date-fns-tz"
 
 export async function createMeeting(
     unsafeData: z.infer<typeof meetingActionSchema>
 ) {
     const { success, data } = meetingActionSchema.safeParse(unsafeData)
+
+    console.log("In the create meeting function.")
+    console.log(success)
+    console.log(data)
 
     if (!success) return { error: true }
 
@@ -25,11 +30,15 @@ export async function createMeeting(
             )
         },
     })
+    console.log(event)
 
     if (event == null) return { error: true }
-    const startInTimezone = fromZonedTime(data.startTime, data.timezone)
 
+    const startInTimezone = fromZonedTime(data.startTime, data.timezone)
     const validTimes = await getValidTimesFromSchedule({ timesInOrder: [startInTimezone], event: event })
+
+    console.log(validTimes)
+
     if (validTimes.length === 0) return { error: true }
 
     await createCalendarEvent({

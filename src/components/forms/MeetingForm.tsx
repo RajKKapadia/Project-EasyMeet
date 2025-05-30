@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { CalendarIcon } from "lucide-react"
 import { Calendar } from "../ui/calendar"
 import { isSameDay, isValid } from "date-fns"
+import { toZonedTime } from "date-fns-tz"
 import { createMeeting } from "@/server/actions/meetings"
 
 // Safe timezone detection with fallbacks for serverless environments
@@ -62,29 +63,27 @@ function getSafeTimezones(): string[] {
     ]
 }
 
-// Safe date formatting with error handling
-function safeFormatDateToParts(date: Date, timezone: string) {
+// Convert UTC date to timezone-aware date using date-fns-tz
+function convertToTimezone(date: Date, timezone: string) {
     try {
-        const timeInTimezone = new Intl.DateTimeFormat('en-US', {
-            timeZone: timezone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).formatToParts(date)
+        // Validate input date
+        if (!isValid(date)) {
+            console.warn('Invalid date passed to convertToTimezone:', date)
+            return date
+        }
 
-        const year = parseInt(timeInTimezone.find(part => part.type === 'year')?.value || '0')
-        const month = parseInt(timeInTimezone.find(part => part.type === 'month')?.value || '0') - 1
-        const day = parseInt(timeInTimezone.find(part => part.type === 'day')?.value || '0')
-        const hour = parseInt(timeInTimezone.find(part => part.type === 'hour')?.value || '0')
-        const minute = parseInt(timeInTimezone.find(part => part.type === 'minute')?.value || '0')
+        // Use toZonedTime to properly convert UTC to target timezone
+        const convertedDate = toZonedTime(date, timezone)
 
-        return new Date(year, month, day, hour, minute)
+        // Additional validation of the converted date
+        if (!isValid(convertedDate)) {
+            console.warn('toZonedTime returned invalid date:', convertedDate)
+            return date
+        }
+
+        return convertedDate
     } catch (error) {
-        console.warn(`Failed to format date for timezone ${timezone}, using original date:`, error)
+        console.error('Error converting date to timezone:', error, 'date:', date, 'timezone:', timezone)
         return date
     }
 }
@@ -138,12 +137,12 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                     return null
                 }
 
-                // Use safe formatting function that handles Intl API failures
-                const convertedDate = safeFormatDateToParts(date, timezone)
+                // Use proper timezone conversion that maintains the relationship to original UTC time
+                const convertedDate = convertToTimezone(date, timezone)
 
                 // Additional validation of the converted date
                 if (!isValid(convertedDate)) {
-                    console.warn('Safe format returned invalid date:', convertedDate)
+                    console.warn('convertToTimezone returned invalid date:', convertedDate)
                     // Fallback: return original date if timezone conversion fails
                     return date
                 }

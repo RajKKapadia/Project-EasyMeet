@@ -51,6 +51,11 @@ export function MeetingForm({
         resolver: zodResolver(meetingFormSchema),
         defaultValues: {
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            date: undefined,
+            startTime: undefined,
+            guestName: "",
+            guestEmail: "",
+            guestNotes: "",
         },
     })
 
@@ -170,7 +175,7 @@ export function MeetingForm({
                                     onValueChange={value =>
                                         field.onChange(new Date(Date.parse(value)))
                                     }
-                                    value={field.value?.toISOString()}
+                                    value={field.value ? field.value?.toISOString() : ""}
                                 >
                                     <FormControl>
                                         <SelectTrigger>

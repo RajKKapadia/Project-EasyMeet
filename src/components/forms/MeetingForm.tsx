@@ -36,7 +36,27 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
     const timezone = form.watch("timezone")
     const date = form.watch("date")
     const validTimesInTimezone = useMemo(() => {
-        return validTimes.map(date => toZonedTime(date, timezone))
+        if (!timezone) return []
+        return validTimes.map(date => {
+            const timeInTimezone = new Intl.DateTimeFormat('en-US', {
+                timeZone: timezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).formatToParts(date)
+            
+            const year = parseInt(timeInTimezone.find(part => part.type === 'year')?.value || '0')
+            const month = parseInt(timeInTimezone.find(part => part.type === 'month')?.value || '0') - 1
+            const day = parseInt(timeInTimezone.find(part => part.type === 'day')?.value || '0')
+            const hour = parseInt(timeInTimezone.find(part => part.type === 'hour')?.value || '0')
+            const minute = parseInt(timeInTimezone.find(part => part.type === 'minute')?.value || '0')
+            
+            return new Date(year, month, day, hour, minute)
+        })
     }, [validTimes, timezone])
     function onSubmit(values: z.infer<typeof meetingFormSchema>) {
         console.log("In the meeting form...")
@@ -49,7 +69,7 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
             })
             if (data?.error) {
                 form.setError("root", {
-                    message: "There was an error saving your event",
+                    message: "There was an error creating your meeting",
                 })
             }
         })
@@ -88,7 +108,7 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                                 </Select>
                             </FormControl>
                             <FormDescription>
-                                The name user will see when booking an event.
+                                Select your timezone for the meeting.
                             </FormDescription>
                             <FormMessage></FormMessage>
                         </FormItem>
@@ -150,9 +170,9 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                                 <Select
                                     disabled={date == null || timezone == null}
                                     onValueChange={value =>
-                                        field.onChange(new Date(Date.parse(value)))
+                                        field.onChange(new Date(value))
                                     }
-                                    defaultValue={field.value?.toISOString()}
+                                    value={field.value?.toISOString()}
                                 >
                                     <FormControl>
                                         <SelectTrigger>
@@ -166,7 +186,7 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        {validTimesInTimezone
+                                        {date && validTimesInTimezone
                                             .filter(time => isSameDay(time, date))
                                             .map(time => (
                                                 <SelectItem
@@ -238,7 +258,7 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                     >
                         <Link href={`/book/${clerkUserId}`}>Cancel</Link>
                     </Button>
-                    <Button disabled={form.formState.isSubmitting && isPending} type="submit">
+                    <Button disabled={form.formState.isSubmitting || isPending} type="submit">
                         Schedule
                     </Button>
                 </div>

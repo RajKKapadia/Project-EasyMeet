@@ -40,7 +40,7 @@ export default async function BookingPage({ params }: { params: Promise<{ clerkU
             </div>
 
             <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
-                {events.map((event, index) => {
+                {events.map((event) => {
                     return (
                         <EventCard key={event.id} {...event}></EventCard>
                     )

@@ -10,11 +10,53 @@ import { scheduleFormSchema } from "@/schema/schedule"
 import { timeToInt } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatTimezoneOffset } from "@/lib/formatters"
-import { Fragment, useState } from "react"
+import { Fragment, useState, useEffect } from "react"
 import { Plus, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { saveSchedule } from "@/server/actions/schedule"
 
+// Safe timezone detection with fallbacks for serverless environments
+function getSafeTimezone(): string {
+    try {
+        // Try browser timezone detection first
+        if (typeof window !== 'undefined') {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+        }
+        // Server-side fallback
+        return 'UTC'
+    } catch (error) {
+        console.warn('Failed to detect timezone, falling back to UTC:', error)
+        return 'UTC'
+    }
+}
+
+// Safe timezone list with fallbacks
+function getSafeTimezones(): string[] {
+    try {
+        if (typeof Intl.supportedValuesOf === 'function') {
+            return Intl.supportedValuesOf("timeZone")
+        }
+    } catch (error) {
+        console.warn('Intl.supportedValuesOf not available, using fallback timezone list:', error)
+    }
+    
+    // Fallback timezone list for common timezones
+    return [
+        'UTC',
+        'America/New_York',
+        'America/Chicago',
+        'America/Denver',
+        'America/Los_Angeles',
+        'Europe/London',
+        'Europe/Paris',
+        'Europe/Berlin',
+        'Asia/Tokyo',
+        'Asia/Shanghai',
+        'Asia/Kolkata',
+        'Australia/Sydney',
+        'Pacific/Auckland'
+    ]
+}
 
 type Availability = {
     startTime: string
@@ -30,16 +72,35 @@ export default function ScheduleForm({ schedule }: {
     }
 }) {
     const [successMessage, setSuccessMessage] = useState<string>()
+    const [availableTimezones, setAvailableTimezones] = useState<string[]>([])
+    const [isTimezonesLoading, setIsTimezonesLoading] = useState(true)
 
     const form = useForm<z.infer<typeof scheduleFormSchema>>({
         resolver: zodResolver(scheduleFormSchema),
         defaultValues: {
-            timezone: schedule?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timezone: schedule?.timezone ?? getSafeTimezone(),
             availabilities: schedule?.availabilities.toSorted((a, b) => {
                 return timeToInt(a.startTime) - timeToInt(b.startTime)
             })
         }
     })
+    
+    // Load timezones safely on client side
+    useEffect(() => {
+        const loadTimezones = async () => {
+            try {
+                const timezones = getSafeTimezones()
+                setAvailableTimezones(timezones)
+            } catch (error) {
+                console.warn('Failed to load timezones, using minimal fallback:', error)
+                setAvailableTimezones(['UTC'])
+            } finally {
+                setIsTimezonesLoading(false)
+            }
+        }
+        
+        loadTimezones()
+    }, [])
 
     const { append: addAvailability, remove: removeAvailability, fields: availabilityFields } = useFieldArray({ name: "availabilities", control: form.control })
 
@@ -84,14 +145,18 @@ export default function ScheduleForm({ schedule }: {
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        {Intl.supportedValuesOf("timeZone").map((timezone, index) => {
-                                            return (
-                                                <SelectItem key={timezone} value={timezone}>
-                                                    {timezone}
-                                                    {` (${formatTimezoneOffset(timezone)})`}
-                                                </SelectItem>
-                                            )
-                                        })}
+                                        {isTimezonesLoading ? (
+                                            <SelectItem value="loading" disabled>Loading timezones...</SelectItem>
+                                        ) : (
+                                            availableTimezones.map((timezone) => {
+                                                return (
+                                                    <SelectItem key={timezone} value={timezone}>
+                                                        {timezone}
+                                                        {` (${formatTimezoneOffset(timezone)})`}
+                                                    </SelectItem>
+                                                )
+                                            })
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </FormControl>

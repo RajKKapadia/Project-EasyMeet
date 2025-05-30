@@ -1,6 +1,5 @@
 "use server"
 
-import "use-server"
 import { clerkClient } from "@clerk/nextjs/server"
 import { google } from "googleapis"
 import { addMinutes, endOfDay, startOfDay } from "date-fns"
@@ -110,10 +109,20 @@ async function getOAuthClient(clerkUserId: string) {
         return
     }
 
+    // Validate environment variables
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    const redirectUrl = process.env.GOOGLE_OAUTH_REDIRECT_URL
+
+    if (!clientId || !clientSecret || !redirectUrl) {
+        console.error('Missing Google OAuth environment variables')
+        return
+    }
+
     const client = new google.auth.OAuth2(
-        process.env.GOOGLE_OAUTH_CLIENT_ID,
-        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-        process.env.GOOGLE_OAUTH_REDIRECT_URL
+        clientId,
+        clientSecret,
+        redirectUrl
     )
 
     client.setCredentials({ access_token: token.data[0].token })

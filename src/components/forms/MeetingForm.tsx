@@ -9,17 +9,85 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Textarea } from "@/components/ui/textarea"
-import { useMemo, useTransition } from "react"
+import { useMemo, useTransition, useEffect, useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatDate, formatTimeString, formatTimezoneOffset } from "@/lib/formatters"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { CalendarIcon } from "lucide-react"
 import { Calendar } from "../ui/calendar"
-import { isSameDay } from "date-fns"
-import { toZonedTime } from "date-fns-tz"
+import { isSameDay, isValid } from "date-fns"
 import { createMeeting } from "@/server/actions/meetings"
 
+// Safe timezone detection with fallbacks for serverless environments
+function getSafeTimezone(): string {
+    try {
+        // Try browser timezone detection first
+        if (typeof window !== 'undefined') {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+        }
+        // Server-side fallback
+        return 'UTC'
+    } catch (error) {
+        console.warn('Failed to detect timezone, falling back to UTC:', error)
+        return 'UTC'
+    }
+}
+
+// Safe timezone list with fallbacks
+function getSafeTimezones(): string[] {
+    try {
+        if (typeof Intl.supportedValuesOf === 'function') {
+            return Intl.supportedValuesOf("timeZone")
+        }
+    } catch (error) {
+        console.warn('Intl.supportedValuesOf not available, using fallback timezone list:', error)
+    }
+
+    // Fallback timezone list for common timezones
+    return [
+        'UTC',
+        'America/New_York',
+        'America/Chicago',
+        'America/Denver',
+        'America/Los_Angeles',
+        'Europe/London',
+        'Europe/Paris',
+        'Europe/Berlin',
+        'Asia/Tokyo',
+        'Asia/Shanghai',
+        'Asia/Kolkata',
+        'Australia/Sydney',
+        'Pacific/Auckland'
+    ]
+}
+
+// Safe date formatting with error handling
+function safeFormatDateToParts(date: Date, timezone: string) {
+    try {
+        const timeInTimezone = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).formatToParts(date)
+
+        const year = parseInt(timeInTimezone.find(part => part.type === 'year')?.value || '0')
+        const month = parseInt(timeInTimezone.find(part => part.type === 'month')?.value || '0') - 1
+        const day = parseInt(timeInTimezone.find(part => part.type === 'day')?.value || '0')
+        const hour = parseInt(timeInTimezone.find(part => part.type === 'hour')?.value || '0')
+        const minute = parseInt(timeInTimezone.find(part => part.type === 'minute')?.value || '0')
+
+        return new Date(year, month, day, hour, minute)
+    } catch (error) {
+        console.warn(`Failed to format date for timezone ${timezone}, using original date:`, error)
+        return date
+    }
+}
 
 export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
     validTimes: Date[],
@@ -27,49 +95,87 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
     clerkUserId: string
 }) {
     const [isPending, startTransition] = useTransition()
+    const [availableTimezones, setAvailableTimezones] = useState<string[]>([])
+    const [isTimezonesLoading, setIsTimezonesLoading] = useState(true)
+
     const form = useForm<z.infer<typeof meetingFormSchema>>({
         resolver: zodResolver(meetingFormSchema),
         defaultValues: {
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            timezone: getSafeTimezone(),
+            date: undefined,
+            startTime: undefined,
+            guestName: "",
+            guestEmail: "",
+            guestNotes: ""
         }
     })
+
+    // Load timezones safely on client side
+    useEffect(() => {
+        const loadTimezones = async () => {
+            try {
+                const timezones = getSafeTimezones()
+                setAvailableTimezones(timezones)
+            } catch (error) {
+                console.warn('Failed to load timezones, using minimal fallback:', error)
+                setAvailableTimezones(['UTC'])
+            } finally {
+                setIsTimezonesLoading(false)
+            }
+        }
+
+        loadTimezones()
+    }, [])
     const timezone = form.watch("timezone")
     const date = form.watch("date")
     const validTimesInTimezone = useMemo(() => {
         if (!timezone) return []
         return validTimes.map(date => {
-            const timeInTimezone = new Intl.DateTimeFormat('en-US', {
-                timeZone: timezone,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            }).formatToParts(date)
-            
-            const year = parseInt(timeInTimezone.find(part => part.type === 'year')?.value || '0')
-            const month = parseInt(timeInTimezone.find(part => part.type === 'month')?.value || '0') - 1
-            const day = parseInt(timeInTimezone.find(part => part.type === 'day')?.value || '0')
-            const hour = parseInt(timeInTimezone.find(part => part.type === 'hour')?.value || '0')
-            const minute = parseInt(timeInTimezone.find(part => part.type === 'minute')?.value || '0')
-            
-            return new Date(year, month, day, hour, minute)
-        })
+            try {
+                // Validate input date
+                if (!isValid(date)) {
+                    console.warn('Invalid date passed to validTimesInTimezone:', date)
+                    return null
+                }
+
+                // Use safe formatting function that handles Intl API failures
+                const convertedDate = safeFormatDateToParts(date, timezone)
+
+                // Additional validation of the converted date
+                if (!isValid(convertedDate)) {
+                    console.warn('Safe format returned invalid date:', convertedDate)
+                    // Fallback: return original date if timezone conversion fails
+                    return date
+                }
+
+                return convertedDate
+            } catch (error) {
+                console.error('Error converting date to timezone:', error, 'date:', date, 'timezone:', timezone)
+                // Fallback: return original date if any error occurs
+                return date
+            }
+        }).filter((date): date is Date => date !== null && isValid(date))
     }, [validTimes, timezone])
     function onSubmit(values: z.infer<typeof meetingFormSchema>) {
         console.log("In the meeting form...")
         console.log(values)
         startTransition(async () => {
-            const data = await createMeeting({
-                ...values,
-                eventId: eventId,
-                clerkUserId: clerkUserId
-            })
-            if (data?.error) {
+            try {
+                const data = await createMeeting({
+                    ...values,
+                    startTime: values.startTime?.toISOString() || '',
+                    eventId: eventId,
+                    clerkUserId: clerkUserId
+                })
+                if (data?.error) {
+                    form.setError("root", {
+                        message: data.message || "There was an error creating your meeting",
+                    })
+                }
+            } catch (error) {
+                console.error('Meeting creation failed:', error)
                 form.setError("root", {
-                    message: "There was an error creating your meeting",
+                    message: "Failed to create meeting. Please try again.",
                 })
             }
         })
@@ -89,21 +195,25 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                         <FormItem>
                             <FormLabel>Timezone</FormLabel>
                             <FormControl>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue></SelectValue>
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        {Intl.supportedValuesOf("timeZone").map((timezone, index) => {
-                                            return (
-                                                <SelectItem key={timezone} value={timezone}>
-                                                    {timezone}
-                                                    {` (${formatTimezoneOffset(timezone)})`}
-                                                </SelectItem>
-                                            )
-                                        })}
+                                        {isTimezonesLoading ? (
+                                            <SelectItem value="loading" disabled>Loading timezones...</SelectItem>
+                                        ) : (
+                                            availableTimezones.map((timezone) => {
+                                                return (
+                                                    <SelectItem key={timezone} value={timezone}>
+                                                        {timezone}
+                                                        {` (${formatTimezoneOffset(timezone)})`}
+                                                    </SelectItem>
+                                                )
+                                            })
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </FormControl>
@@ -169,10 +279,19 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                                 <FormLabel>Time</FormLabel>
                                 <Select
                                     disabled={date == null || timezone == null}
-                                    onValueChange={value =>
-                                        field.onChange(new Date(value))
-                                    }
-                                    value={field.value?.toISOString()}
+                                    onValueChange={value => {
+                                        try {
+                                            const newDate = new Date(value)
+                                            if (!isValid(newDate)) {
+                                                console.warn('Invalid date created from value:', value)
+                                                return
+                                            }
+                                            field.onChange(newDate)
+                                        } catch (error) {
+                                            console.error('Error creating date from value:', value, error)
+                                        }
+                                    }}
+                                    value={field.value && isValid(field.value) ? field.value.toISOString() : ""}
                                 >
                                     <FormControl>
                                         <SelectTrigger>
@@ -187,15 +306,35 @@ export default function MeetingForm({ validTimes, eventId, clerkUserId }: {
                                     </FormControl>
                                     <SelectContent>
                                         {date && validTimesInTimezone
-                                            .filter(time => isSameDay(time, date))
-                                            .map(time => (
-                                                <SelectItem
-                                                    key={time.toISOString()}
-                                                    value={time.toISOString()}
-                                                >
-                                                    {formatTimeString(time)}
-                                                </SelectItem>
-                                            ))}
+                                            .filter(time => {
+                                                try {
+                                                    return isValid(time) && isSameDay(time, date)
+                                                } catch (error) {
+                                                    console.warn('Error filtering time:', time, error)
+                                                    return false
+                                                }
+                                            })
+                                            .map(time => {
+                                                try {
+                                                    if (!isValid(time)) {
+                                                        console.warn('Invalid time in map:', time)
+                                                        return null
+                                                    }
+                                                    const isoString = time.toISOString()
+                                                    return (
+                                                        <SelectItem
+                                                            key={isoString}
+                                                            value={isoString}
+                                                        >
+                                                            {formatTimeString(time)}
+                                                        </SelectItem>
+                                                    )
+                                                } catch (error) {
+                                                    console.error('Error creating SelectItem for time:', time, error)
+                                                    return null
+                                                }
+                                            })
+                                            .filter(Boolean)}
                                     </SelectContent>
                                 </Select>
 

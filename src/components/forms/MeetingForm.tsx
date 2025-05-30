@@ -61,6 +61,9 @@ export function MeetingForm({
     }, [validTimes, timezone])
 
     async function onSubmit(values: z.infer<typeof meetingFormSchema>) {
+
+        console.log(values)
+
         const data = await createMeeting({
             ...values,
             eventId,

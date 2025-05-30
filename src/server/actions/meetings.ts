@@ -1,52 +1,36 @@
 "use server"
 
-import { z } from "zod"
 import { redirect } from "next/navigation"
-import { isValid } from "date-fns"
+
+import { z } from "zod"
+import { fromZonedTime } from "date-fns-tz"
 
 import { db } from "@/drizzle/db"
 import { getValidTimesFromSchedule } from "@/lib/getValidTimesFromSchedule"
 import { meetingActionSchema } from "@/schema/meetings"
+import { createCalendarEvent } from "../googleCalendar"
 
 export async function createMeeting(
     unsafeData: z.infer<typeof meetingActionSchema>
 ) {
     const { success, data } = meetingActionSchema.safeParse(unsafeData)
 
-    if (!success) {
-        console.error('Validation failed:', meetingActionSchema.safeParse(unsafeData).error)
-        return { error: true, message: "Invalid form data" }
-    }
+    if (!success) return { error: true }
 
     const event = await db.query.EventTable.findFirst({
-        where(fields, operators) {
-            return operators.and(
-                operators.eq(fields.isActive, true),
-                operators.eq(fields.clerkUserId, data.clerkUserId),
-                operators.eq(fields.id, data.eventId)
-            )
-        },
+        where: ({ clerkUserId, isActive, id }, { eq, and }) =>
+            and(
+                eq(isActive, true),
+                eq(clerkUserId, data.clerkUserId),
+                eq(id, data.eventId)
+            ),
     })
 
-    if (event == null) {
-        console.error('Event not found:', data.eventId)
-        return { error: true, message: "Event not found" }
-    }
+    if (event == null) return { error: true }
+    const startInTimezone = fromZonedTime(data.startTime, data.timezone)
 
-    // Convert string to Date and validate
-    // The client already sends a properly converted UTC time, so no additional conversion needed
-    const startInTimezone = new Date(data.startTime)
-    if (!isValid(startInTimezone)) {
-        console.error('Invalid startTime provided:', data.startTime)
-        return { error: true, message: "Invalid start time" }
-    }
-
-    const validTimes = await getValidTimesFromSchedule({ timesInOrder: [startTime], event: event })
-
-    if (validTimes.length === 0) {
-        console.error('No valid times available for:', startTime)
-        return { error: true, message: "Selected time is no longer available" }
-    }
+    const validTimes = await getValidTimesFromSchedule([startInTimezone], event)
+    if (validTimes.length === 0) return { error: true }
 
     // await createCalendarEvent({
     //     ...data,
@@ -55,13 +39,8 @@ export async function createMeeting(
     //     eventName: event.name,
     // })
 
-    // Safely handle the redirect with validated date
-    const startTimeParam = isValid(startTime)
-        ? startTime.toISOString()
-        : new Date().toISOString()
-
     redirect(
         `/book/${data.clerkUserId}/${data.eventId
-        }/success?startTime=${startTimeParam}`
+        }/success?startTime=${data.startTime.toISOString()}`
     )
 }

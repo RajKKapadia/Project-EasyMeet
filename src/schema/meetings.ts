@@ -9,14 +9,6 @@ const meetingSchemaBase = z.object({
     timezone: z.string().min(1, "Required"),
 })
 
-const meetingActionSchemaBase = z.object({
-    startTime: z.string().datetime(),
-    guestEmail: z.string().email().min(1, "Required"),
-    guestName: z.string().min(1, "Required"),
-    guestNotes: z.string().optional(),
-    timezone: z.string().min(1, "Required"),
-})
-
 export const meetingFormSchema = z
     .object({
         date: z.date().min(startOfDay(new Date()), "Must be in the future"),
@@ -28,4 +20,4 @@ export const meetingActionSchema = z
         eventId: z.string().min(1, "Required"),
         clerkUserId: z.string().min(1, "Required"),
     })
-    .merge(meetingActionSchemaBase)
+    .merge(meetingSchemaBase)

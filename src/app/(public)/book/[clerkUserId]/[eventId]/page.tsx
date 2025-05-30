@@ -1,4 +1,4 @@
-import MeetingForm from "@/components/forms/MeetingForm"
+import { MeetingForm } from "@/components/forms/MeetingForm"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { db } from "@/drizzle/db"
@@ -38,10 +38,8 @@ export default async function BookEventPage({ params }: { params: Promise<{ cler
     const endDate = endOfDay(addMonths(startDate, 1))
 
     const validTimes = await getValidTimesFromSchedule(
-        {
-            timesInOrder: eachMinuteOfInterval({ start: startDate, end: endDate }, { step: event.durationInMinutes }),
-            event: event
-        }
+        eachMinuteOfInterval({ start: startDate, end: endDate }, { step: 15 }),
+        event
     )
 
     if (validTimes.length === 0) {

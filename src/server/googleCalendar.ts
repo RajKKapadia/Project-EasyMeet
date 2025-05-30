@@ -5,7 +5,8 @@ import { google } from "googleapis"
 import { addMinutes, endOfDay, startOfDay } from "date-fns"
 
 export async function getCalendarEventTimes(
-    { clerkUserId, start, end }: { clerkUserId: string, start: Date, end: Date }
+    clerkUserId: string,
+    { start, end }: { start: Date; end: Date }
 ) {
     const oAuthClient = await getOAuthClient(clerkUserId)
 
@@ -67,7 +68,6 @@ export async function createCalendarEvent({
         calendarId: "primary",
         auth: oAuthClient,
         sendUpdates: "all",
-        conferenceDataVersion: 1,
         requestBody: {
             attendees: [
                 { email: guestEmail, displayName: guestName },
@@ -77,7 +77,7 @@ export async function createCalendarEvent({
                     responseStatus: "accepted",
                 },
             ],
-            description: guestNotes ? `Additional Details: ${guestNotes}` : "No description.",
+            description: guestNotes ? `Additional Details: ${guestNotes}` : undefined,
             start: {
                 dateTime: startTime.toISOString(),
             },
@@ -85,15 +85,7 @@ export async function createCalendarEvent({
                 dateTime: addMinutes(startTime, durationInMinutes).toISOString(),
             },
             summary: `${guestName} + ${calendarUser.fullName}: ${eventName}`,
-            conferenceData: {
-                createRequest: {
-                    requestId: crypto.randomUUID(),
-                    conferenceSolutionKey: {
-                        type: "hangoutsMeet"
-                    }
-                }
-            }
-        }
+        },
     })
 
     return calendarEvent.data
@@ -109,20 +101,10 @@ async function getOAuthClient(clerkUserId: string) {
         return
     }
 
-    // Validate environment variables
-    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
-    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
-    const redirectUrl = process.env.GOOGLE_OAUTH_REDIRECT_URL
-
-    if (!clientId || !clientSecret || !redirectUrl) {
-        console.error('Missing Google OAuth environment variables')
-        return
-    }
-
     const client = new google.auth.OAuth2(
-        clientId,
-        clientSecret,
-        redirectUrl
+        process.env.GOOGLE_OAUTH_CLIENT_ID,
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+        process.env.GOOGLE_OAUTH_REDIRECT_URL
     )
 
     client.setCredentials({ access_token: token.data[0].token })

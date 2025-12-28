@@ -1,0 +1,7 @@
+packages:
+  - '.'
+
+onlyBuiltDependencies:
+  - '@clerk/shared'
+  - esbuild
+  - unrs-resolver
